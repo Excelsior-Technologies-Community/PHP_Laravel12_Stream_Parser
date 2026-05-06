@@ -1,6 +1,5 @@
 <?php
 
-// app/Http/Controllers/StreamParserController.php
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
@@ -8,45 +7,52 @@ use App\Models\UserData;
 
 class StreamParserController extends Controller
 {
-    public function index()
+    // Show upload page + data list
+    public function index(Request $request)
     {
-        return view('stream-parser.index');
+        $search = $request->search;
+
+        $users = UserData::when($search, function ($query) use ($search) {
+            $query->where('name', 'like', "%$search%")
+                ->orWhere('email', 'like', "%$search%")
+                ->orWhere('age', 'like', "%$search%");
+        })
+            ->latest()
+            ->paginate(5);
+
+        return view('stream-parser.index', compact('users', 'search'));
     }
 
+    // Upload & parse file
     public function upload(Request $request)
     {
-        // Validate uploaded file
         $request->validate([
             'file' => 'required|mimes:csv,txt|max:10240',
         ]);
 
         $file = $request->file('file');
 
-        // Open file stream
         if (($handle = fopen($file->getRealPath(), 'r')) !== false) {
 
-            // Skip header row
             $header = fgetcsv($handle, 1000, ',');
 
             while (($row = fgetcsv($handle, 1000, ',')) !== false) {
 
-                // Skip empty or malformed rows
-                if (count($row) < 3) continue;
+                if (count($row) !== 3)
+                    continue;
 
-                // Clean data
-                $name  = trim($row[0] ?? '');
-                $email = trim($row[1] ?? '');
-                $age   = trim($row[2] ?? null);
+                $name = trim($row[0]);
+                $email = trim($row[1]);
+                $age = is_numeric($row[2]) ? (int) $row[2] : null;
 
-                // Skip if email is empty
-                if (empty($email)) continue;
+                if (empty($name) || empty($email))
+                    continue;
 
-                // Insert or update record based on email
                 UserData::updateOrCreate(
-                    ['email' => $email], // unique key
+                    ['email' => $email],
                     [
                         'name' => $name,
-                        'age'  => $age,
+                        'age' => $age,
                     ]
                 );
             }
@@ -54,6 +60,14 @@ class StreamParserController extends Controller
             fclose($handle);
         }
 
-        return redirect()->back()->with('success', 'File parsed and data stored successfully!');
+        return redirect()->back()->with('success', 'File uploaded & data stored!');
+    }
+
+    // Delete record
+    public function destroy($id)
+    {
+        UserData::findOrFail($id)->delete();
+
+        return redirect()->back()->with('success', 'User deleted successfully!');
     }
 }

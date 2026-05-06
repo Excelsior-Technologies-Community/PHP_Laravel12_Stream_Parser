@@ -1,50 +1,97 @@
-<!-- resources/views/stream-parser/index.blade.php -->
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laravel Stream Parser</title>
+    <title>Stream Parser</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gradient-to-br from-indigo-100 to-purple-200 min-h-screen flex items-center justify-center p-4">
 
-<div class="bg-white shadow-xl rounded-2xl p-8 w-full max-w-md border border-gray-200">
-    <h1 class="text-3xl font-extrabold mb-6 text-center text-indigo-700 drop-shadow-md">
-        Stream Parser
-    </h1>
+<body class="bg-gray-100 p-6">
 
-    @if(session('success'))
-        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded shadow-sm">
-            {{ session('success') }}
+    <div class="max-w-6xl mx-auto">
+
+        <!-- SUCCESS ALERT -->
+        @if(session('success'))
+            <div class="bg-green-100 text-green-700 p-3 rounded mb-4">
+                {{ session('success') }}
+            </div>
+        @endif
+
+        <!-- UPLOAD CARD -->
+        <div class="bg-white p-6 rounded shadow mb-6">
+            <h2 class="text-xl font-bold mb-4">Upload File</h2>
+
+            <form action="{{ route('upload') }}" method="POST" enctype="multipart/form-data">
+                @csrf
+                <input type="file" name="file" class="border p-2 rounded w-full mb-3">
+                @error('file') <p class="text-red-500">{{ $message }}</p> @enderror
+
+                <button class="bg-blue-600 text-white px-4 py-2 rounded">
+                    Upload
+                </button>
+            </form>
         </div>
-    @endif
 
-    <form action="{{ route('upload') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
-        @csrf
-
-        <div>
-            <label class="block text-gray-700 font-medium mb-2">Upload CSV File</label>
-            <input 
-                type="file" 
-                name="file" 
-                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-400 focus:outline-none transition duration-200 cursor-pointer"
-            >
-            @error('file') 
-                <p class="text-red-500 mt-2 text-sm">{{ $message }}</p> 
-            @enderror
+        <!-- SEARCH -->
+        <div class="mb-4">
+            <form method="GET">
+                <input type="text" name="search" value="{{ $search }}" placeholder="Search name, email or age..."
+                    class="border p-2 rounded w-1/3">
+                <button class="bg-gray-800 text-white px-4 py-2 rounded">
+                    Search
+                </button>
+            </form>
         </div>
 
-        <button type="submit" 
-            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg shadow-md transition duration-200 hover:shadow-lg">
-            Upload & Parse
-        </button>
-    </form>
+        <!-- TABLE -->
+        <div class="bg-white p-6 rounded shadow">
+            <h2 class="text-xl font-bold mb-4">Users Data</h2>
 
-    <div class="mt-6 text-center text-gray-500 text-sm">
-        Supported format: <span class="font-medium">CSV or TXT</span> | Max size: 10MB
+            <table class="w-full border">
+                <thead class="bg-gray-200">
+                    <tr>
+                        <th class="p-2 border">ID</th>
+                        <th class="p-2 border">Name</th>
+                        <th class="p-2 border">Email</th>
+                        <th class="p-2 border">Age</th>
+                        <th class="p-2 border">Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @forelse($users as $user)
+                        <tr class="text-center">
+                            <td class="p-2 border">{{ $users->firstItem() + $loop->index }}</td>
+                            <td class="p-2 border">{{ $user->name }}</td>
+                            <td class="p-2 border">{{ $user->email }}</td>
+                            <td class="p-2 border">{{ $user->age }}</td>
+                            <td class="p-2 border">
+                                <form action="{{ route('delete', $user->id) }}" method="POST">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="bg-red-500 text-white px-3 py-1 rounded">
+                                        Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="p-3 text-center">No Data Found</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+
+            <!-- PAGINATION -->
+            <div class="mt-4">
+                {{ $users->links() }}
+            </div>
+        </div>
+
     </div>
-</div>
 
 </body>
+
 </html>

@@ -369,3 +369,7 @@ PHP_Laravel12_Stream_Parser/
 ---
 
 Your PHP_Laravel12_Stream_Parser Project is now ready!
+<<<<<<< HEAD
+=======
+
+>>>>>>> development

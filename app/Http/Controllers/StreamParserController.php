@@ -4,70 +4,93 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\UserData;
+use App\Jobs\ProcessStreamJob;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class StreamParserController extends Controller
 {
-    // Show upload page + data list
     public function index(Request $request)
     {
         $search = $request->search;
 
         $users = UserData::when($search, function ($query) use ($search) {
-            $query->where('name', 'like', "%$search%")
-                ->orWhere('email', 'like', "%$search%")
-                ->orWhere('age', 'like', "%$search%");
-        })
-            ->latest()
-            ->paginate(5);
+            $query->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('age', 'like', "%{$search}%");
+        })->latest()->paginate(10);
 
         return view('stream-parser.index', compact('users', 'search'));
     }
 
-    // Upload & parse file
     public function upload(Request $request)
     {
-        $request->validate([
-            'file' => 'required|mimes:csv,txt|max:10240',
-        ]);
+        try {
+            $request->validate([
+                'file' => 'required|file|mimes:csv,txt|max:20480'
+            ]);
 
-        $file = $request->file('file');
+            $file = $request->file('file');
+            $fileName = time() . '_' . $file->getClientOriginalName();
+            $path = $file->storeAs('imports', $fileName, 'local');
 
-        if (($handle = fopen($file->getRealPath(), 'r')) !== false) {
+            $fullPath = Storage::disk('local')->path($path);
 
-            $header = fgetcsv($handle, 1000, ',');
+            ProcessStreamJob::dispatch($fullPath);
 
-            while (($row = fgetcsv($handle, 1000, ',')) !== false) {
+            return response()->json([
+                'success' => true,
+                'message' => 'File uploaded successfully! Processing in background.'
+            ]);
 
-                if (count($row) !== 3)
-                    continue;
-
-                $name = trim($row[0]);
-                $email = trim($row[1]);
-                $age = is_numeric($row[2]) ? (int) $row[2] : null;
-
-                if (empty($name) || empty($email))
-                    continue;
-
-                UserData::updateOrCreate(
-                    ['email' => $email],
-                    [
-                        'name' => $name,
-                        'age' => $age,
-                    ]
-                );
-            }
-
-            fclose($handle);
+        } catch (\Exception $e) {
+            Log::error('Upload error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
         }
-
-        return redirect()->back()->with('success', 'File uploaded & data stored!');
     }
 
-    // Delete record
+    public function download()
+    {
+        $users = UserData::all();
+
+        if ($users->isEmpty()) {
+            return redirect()->back()->with('error', 'No data to download');
+        }
+
+        $callback = function () use ($users) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, ['Name', 'Email', 'Age']);
+
+            foreach ($users as $user) {
+                fputcsv($handle, [
+                    $user->name,
+                    $user->email,
+                    $user->age
+                ]);
+            }
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="users_data_' . date('Y-m-d') . '.csv"',
+        ]);
+    }
+
     public function destroy($id)
     {
-        UserData::findOrFail($id)->delete();
+        try {
+            $user = UserData::findOrFail($id);
+            $user->delete();
 
-        return redirect()->back()->with('success', 'User deleted successfully!');
+            return redirect()->back()->with('success', 'User deleted successfully!');
+
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'User not found');
+        }
     }
 }
